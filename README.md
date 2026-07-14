@@ -63,12 +63,17 @@ intentional: the codec algorithms themselves are implemented separately
 Everything else in this repo - the shared I/O/PCM helpers, the CLI, the
 build scripts, the Spike workflow, the gem5 workflow, the dataset, and
 the comparison/reporting tooling - **is implemented and has been tested
-end-to-end** against the stub codecs (build succeeds on both native and
-RISC-V targets; running the stub under Spike correctly executes on the
-RISC-V ISA simulator and reports the same "not implemented yet" failure
-the native binary reports, proving the toolchain plumbing works). Once
-`encode_file()`/`decode_file()` are filled in for a codec, the entire
-pipeline below should work for it without any script changes.
+end-to-end** against the stub codecs: native and RISC-V builds succeed
+for all three codecs; `scripts/run_native.sh`, `scripts/run_spike.sh`,
+and `scripts/run_gem5.sh` all correctly run the RISC-V binary (under
+Spike+`pk` and under gem5 SE mode respectively) and surface the same
+"not implemented yet" failure the native binary reports, proving the
+full toolchain plumbing works, including real dataset file I/O (not
+just console output) and gem5 stats collection (`scripts/report.py`
+correctly extracts `simInsts`/`numCycles`/`ipc`/cache-miss lines from a
+real `stats.txt`). Once `encode_file()`/`decode_file()` are filled in
+for a codec, the entire pipeline below should work for it without any
+script changes.
 
 ## The three codecs
 

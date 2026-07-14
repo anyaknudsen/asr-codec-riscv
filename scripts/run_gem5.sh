@@ -87,6 +87,8 @@ for codec in $CODECS; do
       "$SE_PY" \
       --cmd="$ELF" \
       --options="$mode $IN_PATH $OUT_PATH" \
+      --output="$ABS_RUN_DIR/simout" \
+      --errout="$ABS_RUN_DIR/simerr" \
       --cpu-type="$CPU_TYPE" \
       "${CACHE_FLAGS[@]}" \
       --mem-size="$MEM_SIZE"

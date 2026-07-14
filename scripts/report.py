@@ -29,19 +29,19 @@ import sys
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 FRAMES_RE = re.compile(r"frames=(\d+)")
-SIM_INSTS_RE = re.compile(r"^\s*simInsts\s+(\d+)")
+SIM_INSTS_RE = re.compile(r"^\s*simInsts\s+(\d+)", re.MULTILINE)
 # gem5's exact stat name for retired cycles has varied across CPU models
 # and gem5 versions (numCycles, system.cpu.numCycles, ...cpu0.numCycles,
 # board.processor.cores0.core.numCycles, etc.) - try a few likely
 # candidates before giving up.
 NUM_CYCLES_RES = [
-    re.compile(r"^\s*system\.cpu\.numCycles\s+(\d+)"),
-    re.compile(r"^\s*system\.cpu0\.numCycles\s+(\d+)"),
-    re.compile(r"(?:^|\.)numCycles\s+(\d+)"),
+    re.compile(r"^\s*system\.cpu\.numCycles\s+(\d+)", re.MULTILINE),
+    re.compile(r"^\s*system\.cpu0\.numCycles\s+(\d+)", re.MULTILINE),
+    re.compile(r"(?:^|\.)numCycles\s+(\d+)", re.MULTILINE),
 ]
 IPC_RES = [
-    re.compile(r"^\s*system\.cpu\.ipc\s+([\d.]+)"),
-    re.compile(r"(?:^|\.)ipc\s+([\d.]+)"),
+    re.compile(r"^\s*system\.cpu\.ipc\s+([\d.]+)", re.MULTILINE),
+    re.compile(r"(?:^|\.)ipc\s+([\d.]+)", re.MULTILINE),
 ]
 CACHE_LINE_RE = re.compile(r"(icache|dcache|l2|l3).*overallMisses.*?(\d+)", re.IGNORECASE)
 
