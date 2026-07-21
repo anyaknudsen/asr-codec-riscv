@@ -21,7 +21,8 @@ speech-codec-riscv/            (this repo, package name asr-codec-riscv)
 
   codecs/
     codec_a/  encoder.c decoder.c codec.h   (not yet implemented, see below)
-    codec_b/  encoder.c decoder.c codec.h   (not yet implemented, see below)
+    codec_b/  encoder.c decoder.c codec.h   MP3: shine encoder + minimp3 decoder
+      vendor/   vendored shine/ + minimp3/ sources (see codec_b/vendor/README.md)
     codec_c/  encoder.c decoder.c codec.h   (not yet implemented, see below)
 
   dataset/
@@ -50,30 +51,43 @@ speech-codec-riscv/            (this repo, package name asr-codec-riscv)
   Makefile                       thin wrapper around scripts/
 ```
 
-## Status: codec algorithms are not implemented yet
+## Status: codec_a and codec_c are not implemented yet, codec_b is
 
-`codecs/codec_a`, `codecs/codec_b`, and `codecs/codec_c` currently
-contain **outline/skeleton files only** - `codec.h`, `encoder.c`, and
+`codecs/codec_a` and `codecs/codec_c` currently contain
+**outline/skeleton files only** - `codec.h`, `encoder.c`, and
 `decoder.c` with the shared interface wired up and `TODO(codec_x)`
 comments describing what goes where, but `encode_file()`/`decode_file()`
 just print "not implemented yet" and return failure. This is
 intentional: the codec algorithms themselves are implemented separately
 (see the `TODO` comments in each file for the expected structure).
 
+`codecs/codec_b` is implemented: it's MP3 (MPEG-1/2 Audio Layer III),
+encoding via the vendored `shine` fixed-point encoder and decoding via
+the vendored `minimp3` decoder (see `codecs/codec_b/codec.h` and
+`codecs/codec_b/vendor/README.md` for the full design and provenance).
+`encoder.c`/`decoder.c` are thin adapters, not reimplementations - the
+actual codec algorithm lives entirely in `codecs/codec_b/vendor/`.
+This is also why `scripts/build_native.sh`/`scripts/build_riscv.sh`
+compile every `*.c` found anywhere under `codecs/<name>/` rather than
+just `encoder.c`/`decoder.c` - a codec is free to bring in extra source
+files of its own the same way codec_b does.
+
 Everything else in this repo - the shared I/O/PCM helpers, the CLI, the
 build scripts, the Spike workflow, the gem5 workflow, the dataset, and
 the comparison/reporting tooling - **is implemented and has been tested
-end-to-end** against the stub codecs: native and RISC-V builds succeed
-for all three codecs; `scripts/run_native.sh`, `scripts/run_spike.sh`,
-and `scripts/run_gem5.sh` all correctly run the RISC-V binary (under
-Spike+`pk` and under gem5 SE mode respectively) and surface the same
-"not implemented yet" failure the native binary reports, proving the
-full toolchain plumbing works, including real dataset file I/O (not
-just console output) and gem5 stats collection (`scripts/report.py`
-correctly extracts `simInsts`/`numCycles`/`ipc`/cache-miss lines from a
-real `stats.txt`). Once `encode_file()`/`decode_file()` are filled in
-for a codec, the entire pipeline below should work for it without any
-script changes.
+end-to-end**: native and RISC-V builds succeed for all three codecs;
+`scripts/run_native.sh`, `scripts/run_spike.sh`, and
+`scripts/run_gem5.sh` all correctly run the RISC-V binary (under
+Spike+`pk` and under gem5 SE mode respectively). For codec_a/codec_c
+(still stubs) this surfaces the same "not implemented yet" failure the
+native binary reports, proving the full toolchain plumbing works; for
+codec_b it runs the real MP3 encode/decode, including real dataset file
+I/O (not just console output). `scripts/report.py` correctly extracts
+`simInsts`/`numCycles`/`ipc`/cache-miss lines from a real `stats.txt`
+and `frames=<n>` from any codec's own log/stdout, including codec_b's.
+Once `encode_file()`/`decode_file()` are filled in for `codec_a`/
+`codec_c` too, the entire pipeline below should work for them without
+any further script changes.
 
 ## The three codecs
 
@@ -99,17 +113,27 @@ int encode_file(const char *input_path, const char *output_path);
 int decode_file(const char *input_path, const char *output_path);
 ```
 
-`app/main.c` is linked directly against exactly one codec's
-`encoder.c`/`decoder.c` per binary (see `scripts/build_native.sh` /
-`scripts/build_riscv.sh`), so `main.c` never needs to know which codec
-it was built with - it only parses `<encode|decode> <in> <out>`, calls
-the matching function, prints `frames=<n>`, and returns success/failure.
+`app/main.c` is linked directly against exactly one codec's object
+files per binary (see `scripts/build_native.sh` / `scripts/build_riscv.sh`
+- every `*.c` found under that codec's `codecs/<name>/` directory,
+recursively), so `main.c` never needs to know which codec it was built
+with - it only parses `<encode|decode> <in> <out>`, calls the matching
+function, prints `frames=<n>`, and returns success/failure.
 `codecs/<name>/codec.h` is where that codec's own constants (sample
 rate, frame size, bitstream magic, quantizer tables, etc.) belong. Fill
 in the `TODO(codec_x)` markers in `codec.h`/`encoder.c`/`decoder.c` to
 implement each codec; do not change the `encode_file()`/`decode_file()`
 signatures, since the whole build/run pipeline depends on that contract
 staying stable.
+
+`encoder.c`/`decoder.c` don't have to contain the whole codec
+algorithm themselves - they can be thin adapters around extra source
+files of their own that a codec brings in under its own
+`codecs/<name>/` directory (e.g. a vendored library). `codec_b` does
+exactly this: `codecs/codec_b/encoder.c`/`decoder.c` are adapters
+around the vendored `shine` MP3 encoder and `minimp3` MP3 decoder in
+`codecs/codec_b/vendor/` (see `codecs/codec_b/codec.h` and
+`codecs/codec_b/vendor/README.md`).
 
 ## Dataset
 
