@@ -5,13 +5,17 @@ Implements workflow steps 7-8:
   7. Performance metric extraction (from gem5 stats.txt)
   8. Cycles/frame and real-time feasibility analysis
 
+This project only exercises/measures the encoder: decoding is assumed
+to happen off the edge device this project profiles (see README.md),
+so this script only reports encoder numbers.
+
 Reads:
   - "frames=<n>" from the codec binary's own stdout, captured by
     scripts/run_native.sh / scripts/run_spike.sh into
-    results/<runner>/<codec>_<name>_<mode>.log, or by gem5 itself into
-    results/gem5/<codec>_<name>_<mode>/simout.
+    results/<runner>/<codec>_<name>.log, or by gem5 itself into
+    results/gem5/<codec>_<name>/simout.
   - simInsts / numCycles / ipc / cache-miss stats from
-    results/gem5/<codec>_<name>_<mode>/stats.txt.
+    results/gem5/<codec>_<name>/stats.txt.
 
 Only trust these numbers once scripts/compare_outputs.sh reports that
 native, Spike, and gem5 outputs all match (see README.md).
@@ -19,7 +23,7 @@ native, Spike, and gem5 outputs all match (see README.md).
 Usage:
   python3 scripts/report.py
   python3 scripts/report.py --input dataset/pcm/tiny_1frame.pcm --clock-mhz 100
-  python3 scripts/report.py --codecs codec_a codec_b --modes encode
+  python3 scripts/report.py --codecs codec_a codec_b
 """
 import argparse
 import os
@@ -62,15 +66,15 @@ def read_text(path):
         return None
 
 
-def find_frames(codec, name, mode, runner):
+def find_frames(codec, name, runner):
     """runner is 'native', 'spike', or 'gem5'."""
     if runner == "gem5":
         candidates = [
-            os.path.join(ROOT_DIR, "results", "gem5", f"{codec}_{name}_{mode}", "simout"),
+            os.path.join(ROOT_DIR, "results", "gem5", f"{codec}_{name}", "simout"),
         ]
     else:
         candidates = [
-            os.path.join(ROOT_DIR, "results", runner, f"{codec}_{name}_{mode}.log"),
+            os.path.join(ROOT_DIR, "results", runner, f"{codec}_{name}.log"),
         ]
     for path in candidates:
         text = read_text(path)
@@ -82,8 +86,8 @@ def find_frames(codec, name, mode, runner):
     return None
 
 
-def parse_gem5_stats(codec, name, mode):
-    stats_path = os.path.join(ROOT_DIR, "results", "gem5", f"{codec}_{name}_{mode}", "stats.txt")
+def parse_gem5_stats(codec, name):
+    stats_path = os.path.join(ROOT_DIR, "results", "gem5", f"{codec}_{name}", "stats.txt")
     text = read_text(stats_path)
     if text is None:
         return None
@@ -118,7 +122,6 @@ def main():
     parser.add_argument("--input", default="dataset/pcm/tiny_1frame.pcm",
                          help="dataset PCM file the runs were performed on")
     parser.add_argument("--codecs", nargs="+", default=["codec_a", "codec_b", "codec_c"])
-    parser.add_argument("--modes", nargs="+", default=["encode", "decode"])
     parser.add_argument("--clock-mhz", type=float, default=100.0,
                          help="target clock frequency in MHz for the real-time feasibility check")
     parser.add_argument("--frame-ms", type=float, default=None,
@@ -134,49 +137,47 @@ def main():
 
     rows = []
     for codec in args.codecs:
-        for mode in args.modes:
-            frames = (
-                find_frames(codec, name, mode, "gem5")
-                or find_frames(codec, name, mode, "spike")
-                or find_frames(codec, name, mode, "native")
-            )
-            gem5_stats = parse_gem5_stats(codec, name, mode)
+        frames = (
+            find_frames(codec, name, "gem5")
+            or find_frames(codec, name, "spike")
+            or find_frames(codec, name, "native")
+        )
+        gem5_stats = parse_gem5_stats(codec, name)
 
-            row = {
-                "codec": codec,
-                "mode": mode,
-                "frames": frames,
-                "sim_insts": None,
-                "num_cycles": None,
-                "ipc": None,
-                "instr_per_frame": None,
-                "cycles_per_frame": None,
-                "realtime_ok": None,
-                "cache_lines": [],
-            }
+        row = {
+            "codec": codec,
+            "frames": frames,
+            "sim_insts": None,
+            "num_cycles": None,
+            "ipc": None,
+            "instr_per_frame": None,
+            "cycles_per_frame": None,
+            "realtime_ok": None,
+            "cache_lines": [],
+        }
 
-            if gem5_stats:
-                row["sim_insts"] = gem5_stats["sim_insts"]
-                row["num_cycles"] = gem5_stats["num_cycles"]
-                row["ipc"] = gem5_stats["ipc"]
-                row["cache_lines"] = gem5_stats["cache_lines"]
+        if gem5_stats:
+            row["sim_insts"] = gem5_stats["sim_insts"]
+            row["num_cycles"] = gem5_stats["num_cycles"]
+            row["ipc"] = gem5_stats["ipc"]
+            row["cache_lines"] = gem5_stats["cache_lines"]
 
-                if frames and gem5_stats["sim_insts"]:
-                    row["instr_per_frame"] = gem5_stats["sim_insts"] / frames
-                if frames and gem5_stats["num_cycles"]:
-                    row["cycles_per_frame"] = gem5_stats["num_cycles"] / frames
+            if frames and gem5_stats["sim_insts"]:
+                row["instr_per_frame"] = gem5_stats["sim_insts"] / frames
+            if frames and gem5_stats["num_cycles"]:
+                row["cycles_per_frame"] = gem5_stats["num_cycles"] / frames
 
-                if row["cycles_per_frame"] and args.frame_ms:
-                    available_cycles_per_frame = args.clock_mhz * 1e6 * (args.frame_ms / 1000.0)
-                    usage = row["cycles_per_frame"] / available_cycles_per_frame
-                    row["realtime_ok"] = usage <= 1.0
-                    row["cpu_usage"] = usage
+            if row["cycles_per_frame"] and args.frame_ms:
+                available_cycles_per_frame = args.clock_mhz * 1e6 * (args.frame_ms / 1000.0)
+                usage = row["cycles_per_frame"] / available_cycles_per_frame
+                row["realtime_ok"] = usage <= 1.0
+                row["cpu_usage"] = usage
 
-            rows.append(row)
+        rows.append(row)
 
-    header = ["codec", "mode", "frames", "instr/frame", "cycles/frame", "ipc",
+    header = ["codec", "frames", "instr/frame", "cycles/frame", "ipc",
                f"cpu%@{args.clock_mhz:g}MHz", "real-time?"]
-    col_widths = [10, 8, 8, 14, 14, 8, 14, 11]
+    col_widths = [10, 8, 14, 14, 8, 14, 11]
 
     def fmt_row(cells):
         return "  ".join(str(c).ljust(w) for c, w in zip(cells, col_widths))
@@ -189,7 +190,7 @@ def main():
         ipc = f"{row['ipc']:.2f}" if row["ipc"] else "n/a"
         cpu_pct = f"{row['cpu_usage'] * 100:.1f}%" if row.get("cpu_usage") is not None else "n/a"
         rt = ("yes" if row["realtime_ok"] else "no") if row["realtime_ok"] is not None else "n/a"
-        print(fmt_row([row["codec"], row["mode"], row["frames"] if row["frames"] is not None else "n/a",
+        print(fmt_row([row["codec"], row["frames"] if row["frames"] is not None else "n/a",
                         instr_pf, cyc_pf, ipc, cpu_pct, rt]))
 
         if args.show_cache_lines and row["cache_lines"]:

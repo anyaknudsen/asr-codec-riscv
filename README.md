@@ -1,9 +1,15 @@
 # asr-codec-riscv
 
-A single repository for evaluating three speech codecs on RISC-V:
-first for **correctness** (native C vs. the RISC-V binary running under
-the Spike ISA simulator), then for **performance** (the same RISC-V
-binary running under the gem5 architectural simulator).
+A single repository for evaluating three speech codec **encoders** on
+RISC-V: first for **correctness** (native C vs. the RISC-V binary
+running under the Spike ISA simulator), then for **performance** (the
+same RISC-V binary running under the gem5 architectural simulator).
+
+This project deliberately only implements/measures the encoder side of
+each codec: the target use case is an edge device that only encodes,
+offloading decoding to another device entirely. There is no decoder,
+no decode step in any script, and no decode data in any report - see
+"Status" below.
 
 One repo, three codec folders, one shared dataset, one shared build
 system, one Spike workflow, one gem5 workflow, one comparison/reporting
@@ -12,18 +18,18 @@ format. All three codecs are treated identically by every script below.
 ```
 speech-codec-riscv/            (this repo, package name asr-codec-riscv)
   app/
-    main.c                     CLI entry point (encode/decode dispatch only)
+    main.c                     CLI entry point (encoder dispatch only)
 
   common/
     io.c / io.h                generic file I/O helpers
     pcm.c / pcm.h               PCM (s16le) helpers, frame handling
-    codec_api.h                 shared encode_file()/decode_file() interface
+    codec_api.h                 shared encode_file() interface
 
   codecs/
-    codec_a/  encoder.c decoder.c codec.h   (not yet implemented, see below)
-    codec_b/  encoder.c decoder.c codec.h   MP3: shine encoder + minimp3 decoder
-      vendor/   vendored shine/ + minimp3/ sources (see codec_b/vendor/README.md)
-    codec_c/  encoder.c decoder.c codec.h   (not yet implemented, see below)
+    codec_a/  encoder.c codec.h   (not yet implemented, see below)
+    codec_b/  encoder.c codec.h   MP3: shine (fixed-point) encoder
+      vendor/   vendored shine/ sources (see codec_b/vendor/README.md)
+    codec_c/  encoder.c codec.h   (not yet implemented, see below)
 
   dataset/
     raw/                        original recordings (.wav), if you add any
@@ -40,9 +46,9 @@ speech-codec-riscv/            (this repo, package name asr-codec-riscv)
   scripts/
     build_native.sh              build build/<codec>_native
     build_riscv.sh                build build/<codec>_rv64.elf
-    run_native.sh                  run native encode+decode
-    run_spike.sh                    run Spike encode+decode (via riscv-pk)
-    run_gem5.sh                      run gem5 SE-mode encode+decode + stats
+    run_native.sh                  run native encoder
+    run_spike.sh                    run Spike encoder (via riscv-pk)
+    run_gem5.sh                      run gem5 SE-mode encoder + stats
     inspect_riscv.sh                 objdump + Spike instruction trace (tiny input)
     compare_outputs.sh                native vs Spike vs gem5 diff
     gen_dataset.py                    generate the synthetic PCM dataset
@@ -53,24 +59,29 @@ speech-codec-riscv/            (this repo, package name asr-codec-riscv)
 
 ## Status: codec_a and codec_c are not implemented yet, codec_b is
 
-`codecs/codec_a` and `codecs/codec_c` currently contain
-**outline/skeleton files only** - `codec.h`, `encoder.c`, and
-`decoder.c` with the shared interface wired up and `TODO(codec_x)`
-comments describing what goes where, but `encode_file()`/`decode_file()`
-just print "not implemented yet" and return failure. This is
-intentional: the codec algorithms themselves are implemented separately
-(see the `TODO` comments in each file for the expected structure).
+This project only implements/measures the **encoder**. There is no
+`decoder.c` anywhere in this repo, no decode step in any script, and
+no decode row in any report - the target use case is an edge device
+that only encodes, offloading decoding to another device entirely.
 
-`codecs/codec_b` is implemented: it's MP3 (MPEG-1/2 Audio Layer III),
-encoding via the vendored `shine` fixed-point encoder and decoding via
-the vendored `minimp3` decoder (see `codecs/codec_b/codec.h` and
-`codecs/codec_b/vendor/README.md` for the full design and provenance).
-`encoder.c`/`decoder.c` are thin adapters, not reimplementations - the
-actual codec algorithm lives entirely in `codecs/codec_b/vendor/`.
-This is also why `scripts/build_native.sh`/`scripts/build_riscv.sh`
-compile every `*.c` found anywhere under `codecs/<name>/` rather than
-just `encoder.c`/`decoder.c` - a codec is free to bring in extra source
-files of its own the same way codec_b does.
+`codecs/codec_a` and `codecs/codec_c` currently contain
+**outline/skeleton files only** - `codec.h` and `encoder.c` with the
+shared interface wired up and `TODO(codec_x)` comments describing what
+goes where, but `encode_file()` just prints "not implemented yet" and
+returns failure. This is intentional: the codec algorithms themselves
+are implemented separately (see the `TODO` comments in each file for
+the expected structure).
+
+`codecs/codec_b` is implemented: it's an MP3 (MPEG-1/2 Audio Layer
+III) encoder, via the vendored `shine` fixed-point encoder (see
+`codecs/codec_b/codec.h` and `codecs/codec_b/vendor/README.md` for the
+full design and provenance). `encoder.c` is a thin adapter, not a
+reimplementation - the actual codec algorithm lives entirely in
+`codecs/codec_b/vendor/`. This is also why
+`scripts/build_native.sh`/`scripts/build_riscv.sh` compile every `*.c`
+found anywhere under `codecs/<name>/` rather than just `encoder.c` - a
+codec is free to bring in extra source files of its own the same way
+codec_b does.
 
 Everything else in this repo - the shared I/O/PCM helpers, the CLI, the
 build scripts, the Spike workflow, the gem5 workflow, the dataset, and
@@ -81,13 +92,13 @@ end-to-end**: native and RISC-V builds succeed for all three codecs;
 Spike+`pk` and under gem5 SE mode respectively). For codec_a/codec_c
 (still stubs) this surfaces the same "not implemented yet" failure the
 native binary reports, proving the full toolchain plumbing works; for
-codec_b it runs the real MP3 encode/decode, including real dataset file
-I/O (not just console output). `scripts/report.py` correctly extracts
+codec_b it runs the real MP3 encode, including real dataset file I/O
+(not just console output). `scripts/report.py` correctly extracts
 `simInsts`/`numCycles`/`ipc`/cache-miss lines from a real `stats.txt`
 and `frames=<n>` from any codec's own log/stdout, including codec_b's.
-Once `encode_file()`/`decode_file()` are filled in for `codec_a`/
-`codec_c` too, the entire pipeline below should work for them without
-any further script changes.
+Once `encode_file()` is filled in for `codec_a`/`codec_c` too, the
+entire pipeline below should work for them without any further script
+changes.
 
 ## The three codecs
 
@@ -105,35 +116,37 @@ which is precisely what makes a one-repo, three-folder layout better
 here than three separate repos: the codecs are part of the same
 performance comparison, not unrelated projects.
 
-Each codec implements exactly two functions, declared in
+Each codec implements exactly one function, declared in
 `common/codec_api.h`:
 
 ```c
 int encode_file(const char *input_path, const char *output_path);
-int decode_file(const char *input_path, const char *output_path);
 ```
+
+There is deliberately no `decode_file()` and no decoder anywhere in
+this repo: this project profiles an edge device that only encodes and
+offloads decoding to another device, so decoder compute/performance is
+out of scope entirely (see "Status" above).
 
 `app/main.c` is linked directly against exactly one codec's object
 files per binary (see `scripts/build_native.sh` / `scripts/build_riscv.sh`
 - every `*.c` found under that codec's `codecs/<name>/` directory,
 recursively), so `main.c` never needs to know which codec it was built
-with - it only parses `<encode|decode> <in> <out>`, calls the matching
-function, prints `frames=<n>`, and returns success/failure.
+with - it only parses `<in> <out>`, calls `encode_file()`, prints
+`frames=<n>`, and returns success/failure.
 `codecs/<name>/codec.h` is where that codec's own constants (sample
 rate, frame size, bitstream magic, quantizer tables, etc.) belong. Fill
-in the `TODO(codec_x)` markers in `codec.h`/`encoder.c`/`decoder.c` to
-implement each codec; do not change the `encode_file()`/`decode_file()`
-signatures, since the whole build/run pipeline depends on that contract
-staying stable.
+in the `TODO(codec_x)` markers in `codec.h`/`encoder.c` to implement
+each codec; do not change the `encode_file()` signature, since the
+whole build/run pipeline depends on that contract staying stable.
 
-`encoder.c`/`decoder.c` don't have to contain the whole codec
-algorithm themselves - they can be thin adapters around extra source
-files of their own that a codec brings in under its own
-`codecs/<name>/` directory (e.g. a vendored library). `codec_b` does
-exactly this: `codecs/codec_b/encoder.c`/`decoder.c` are adapters
-around the vendored `shine` MP3 encoder and `minimp3` MP3 decoder in
-`codecs/codec_b/vendor/` (see `codecs/codec_b/codec.h` and
-`codecs/codec_b/vendor/README.md`).
+`encoder.c` doesn't have to contain the whole codec algorithm itself -
+it can be a thin adapter around extra source files of its own that a
+codec brings in under its own `codecs/<name>/` directory (e.g. a
+vendored library). `codec_b` does exactly this:
+`codecs/codec_b/encoder.c` is an adapter around the vendored `shine`
+MP3 encoder in `codecs/codec_b/vendor/` (see `codecs/codec_b/codec.h`
+and `codecs/codec_b/vendor/README.md`).
 
 ## Dataset
 
@@ -172,7 +185,7 @@ directly comparable.
 6. Output comparison
 7. Performance metric extraction
 8. Cycles/frame and real-time feasibility analysis
-9. Repeat for all three codecs, both encode and decode
+9. Repeat for all three codecs
 ```
 
 Native run:
@@ -239,7 +252,7 @@ performance measurement.
 ### 5. gem5 performance simulation
 
 ```bash
-GEM5_ROOT=/path/to/gem5 bash scripts/run_gem5.sh   # -> results/gem5/<run>/{*.bit,*.pcm,stats.txt,...}
+GEM5_ROOT=/path/to/gem5 bash scripts/run_gem5.sh   # -> results/gem5/<run>/{*.bit,stats.txt,...}
 ```
 
 Defaults to `INPUT=dataset/pcm/tiny_1frame.pcm` (gem5 simulation is
@@ -251,11 +264,10 @@ much slower than Spike - start tiny). See "gem5 setup" below.
 bash scripts/compare_outputs.sh
 ```
 
-Checks `native == Spike == gem5` for both the encoded `.bit` and the
-decoded `.pcm`, for every codec. Prints `All outputs match` if so. Only
-trust performance numbers (step 7-8) once this passes. Pass
-`WITH_GEM5=0` to compare native vs. Spike only (e.g. before you've run
-gem5 yet).
+Checks `native == Spike == gem5` for the encoded `.bit`, for every
+codec. Prints `All outputs match` if so. Only trust performance numbers
+(step 7-8) once this passes. Pass `WITH_GEM5=0` to compare native vs.
+Spike only (e.g. before you've run gem5 yet).
 
 ### 7-8. Performance metrics + real-time feasibility
 
@@ -286,38 +298,35 @@ grep -E "simInsts|numCycles|ipc|cpi|icache|dcache" results/gem5/<run>/stats.txt
 
 ### 9. Repeat
 
-Repeat steps 3-8 for `codec_a`, `codec_b`, `codec_c`, for both `encode`
-and `decode`, and for each dataset input you care about (see
-`dataset/README.md` - don't judge codecs on a single input file, since
-codec workload is signal-dependent). Also repeat across build variants
-you want to compare: `-O2` vs `-O3`, `rv64gc` vs `rv64imac`, different
-gem5 cache sizes, `TimingSimpleCPU` vs another gem5 CPU model, etc. -
-every script here reads its build/ISA/CPU knobs from environment
-variables for exactly this reason (see each script's header comment).
+Repeat steps 3-8 for `codec_a`, `codec_b`, `codec_c`, and for each
+dataset input you care about (see `dataset/README.md` - don't judge
+codecs on a single input file, since codec workload is
+signal-dependent). Also repeat across build variants you want to
+compare: `-O2` vs `-O3`, `rv64gc` vs `rv64imac`, different gem5 cache
+sizes, `TimingSimpleCPU` vs another gem5 CPU model, etc. - every script
+here reads its build/ISA/CPU knobs from environment variables for
+exactly this reason (see each script's header comment).
 
 ## Target comparison table
 
 Once codecs are implemented and the above has been run for each
-input/codec/mode, the report this project is meant to produce looks
-like:
+input/codec, the report this project is meant to produce looks like
+(encoder only - see "Status" above):
 
 ```
-Codec     Mode     Output correct?   Frames   Cycles/frame   Instr/frame   IPC   Real-time at 100 MHz?
-codec_a   encode   yes               50       500000         800000        1.6   yes
-codec_a   decode   yes               50       ...            ...           ...   ...
-codec_b   encode   yes               50       900000         1300000       1.4   yes
-codec_b   decode   yes               50       ...            ...           ...   ...
-codec_c   encode   yes               50       2400000        3000000       1.25  no
-codec_c   decode   yes               50       ...            ...           ...   ...
+Codec     Output correct?   Frames   Cycles/frame   Instr/frame   IPC   Real-time at 100 MHz?
+codec_a   yes               50       500000         800000        1.6   yes
+codec_b   yes               50       900000         1300000       1.4   yes
+codec_c   yes               50       2400000        3000000       1.25  no
 ```
 
 or, per input, per ISA/opt-level variant:
 
 ```
-Input              Frames   Codec     Mode     ISA      Opt   Instr/frame   Cycles/frame   IPC   D$ misses/frame   Real-time at 100 MHz?
-tiny_1frame         1       codec_a   encode   rv64gc   -O2   ...           ...            ...   ...               yes/no
-small_10frames      10      codec_a   encode   rv64gc   -O2   ...           ...            ...   ...               yes/no
-medium_1sec          50      codec_a   encode   rv64gc   -O2   ...           ...            ...   ...               yes/no
+Input              Frames   Codec     ISA      Opt   Instr/frame   Cycles/frame   IPC   D$ misses/frame   Real-time at 100 MHz?
+tiny_1frame         1       codec_a   rv64gc   -O2   ...           ...            ...   ...               yes/no
+small_10frames      10      codec_a   rv64gc   -O2   ...           ...            ...   ...               yes/no
+medium_1sec          50      codec_a   rv64gc   -O2   ...           ...            ...   ...               yes/no
 ```
 
 ## RISC-V toolchain setup
@@ -417,7 +426,7 @@ export PATH=/opt/riscv-tools/install/bin:/opt/riscv-tools/install/riscv64-unknow
 ### Verify Spike + pk
 
 ```bash
-spike pk build/codec_a_rv64.elf encode dataset/pcm/tiny_1frame.pcm /tmp/out.bit
+spike pk build/codec_a_rv64.elf dataset/pcm/tiny_1frame.pcm /tmp/out.bit
 ```
 
 (Will currently print `codec_a: encode_file() is not implemented yet`
@@ -470,11 +479,10 @@ L1D_SIZE=64kB L1I_SIZE=64kB bash scripts/run_gem5.sh
 
 Compare, at minimum: `-O0`/`-O2`/`-O3`, `rv64gc` vs `rv64imac`, `rv32*`
 vs `rv64*`, floating-point vs. fixed-point codecs, with/without gem5
-caches, different L1 sizes, different gem5 CPU models, encoder vs.
-decoder, and `codec_a` vs. `codec_b` vs. `codec_c`. Always keep
-`-ffp-contract=off` (already the default in both build scripts) when
-comparing floating-point codecs across native and RISC-V - see the
-portability note below.
+caches, different L1 sizes, different gem5 CPU models, and `codec_a`
+vs. `codec_b` vs. `codec_c`. Always keep `-ffp-contract=off` (already
+the default in both build scripts) when comparing floating-point
+codecs across native and RISC-V - see the portability note below.
 
 ## Common C portability issues (native -> RISC-V)
 
@@ -515,12 +523,16 @@ RISC-V output silently diverging is the failure mode
 ## Repository conventions
 
 - `app/main.c` never contains codec algorithm code - only argument
-  parsing, calling the codec's `encode_file()`/`decode_file()`, and
-  printing the `frames=<n>` summary line other tooling
-  (`scripts/report.py`) parses back out.
+  parsing, calling the codec's `encode_file()`, and printing the
+  `frames=<n>` summary line other tooling (`scripts/report.py`) parses
+  back out.
 - `common/` never contains codec-specific logic - only generic file
   I/O (`io.c`/`io.h`) and generic PCM handling (`pcm.c`/`pcm.h`).
 - Each `codecs/<name>/` folder owns its own bitstream format, internal
   helpers, and constants; nothing outside that folder should need to
-  know about them beyond the shared `encode_file()`/`decode_file()`
-  contract in `common/codec_api.h`.
+  know about them beyond the shared `encode_file()` contract in
+  `common/codec_api.h`.
+- This project only implements/measures the encoder. Decoding is
+  assumed to happen on another device, off the edge target this
+  project profiles - do not add a `decode_file()`/`decoder.c` back in
+  without revisiting this convention deliberately.

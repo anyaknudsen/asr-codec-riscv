@@ -1,15 +1,19 @@
 #!/bin/bash
-# Runs the native encoder and decoder for each codec on one dataset
-# input file, producing the reference outputs that Spike and gem5
-# outputs get compared against.
+# Runs the native encoder for each codec on one dataset input file,
+# producing the reference output that Spike and gem5 encode outputs
+# get compared against.
+#
+# This project only exercises/measures the encoder: decoding is
+# assumed to happen off the edge device this project profiles (see
+# README.md), so there is no decode step here.
 #
 # Usage:
 #   bash scripts/run_native.sh
 #   INPUT=dataset/pcm/tiny_1frame.pcm bash scripts/run_native.sh
 #
 # Produces (for INPUT=dataset/pcm/<name>.pcm):
-#   results/native/<codec>_<name>.bit             (encode output)
-#   results/native/<codec>_<name>_decoded.pcm     (decode output)
+#   results/native/<codec>_<name>.bit   (encode output)
+#   results/native/<codec>_<name>.log   (encoder stdout, incl. frames=<n>)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,13 +34,9 @@ for codec in $CODECS; do
   fi
 
   BIT="results/native/${codec}_${NAME}.bit"
-  DECODED="results/native/${codec}_${NAME}_decoded.pcm"
 
   echo "==> ${codec}: native encode"
-  "$BIN" encode "$INPUT" "$BIT" | tee "results/native/${codec}_${NAME}_encode.log"
-
-  echo "==> ${codec}: native decode"
-  "$BIN" decode "$BIT" "$DECODED" | tee "results/native/${codec}_${NAME}_decode.log"
+  "$BIN" "$INPUT" "$BIT" | tee "results/native/${codec}_${NAME}.log"
 done
 
 echo "Native run complete for INPUT=$INPUT"

@@ -1,12 +1,16 @@
 #!/bin/bash
-# Runs each codec's RISC-V binary under Spike, the golden functional
-# RISC-V ISA simulator, using riscv-pk (the proxy kernel) to provide
-# file I/O and other syscalls over Spike's HTIF mechanism.
+# Runs each codec's RISC-V encoder binary under Spike, the golden
+# functional RISC-V ISA simulator, using riscv-pk (the proxy kernel)
+# to provide file I/O and other syscalls over Spike's HTIF mechanism.
 #
-# Spike checks that the RISC-V binary behaves correctly. It is
+# Spike checks that the RISC-V binary *behaves correctly*. It is
 # deliberately NOT used for performance numbers here: Spike does not
 # model caches, pipelines, branch prediction, or memory stalls. See
 # scripts/run_gem5.sh for the architecture-level performance simulator.
+#
+# This project only exercises/measures the encoder: decoding is
+# assumed to happen off the edge device this project profiles (see
+# README.md), so there is no decode step here.
 #
 # Usage:
 #   bash scripts/run_spike.sh
@@ -14,7 +18,7 @@
 #
 # Produces (for INPUT=dataset/pcm/<name>.pcm):
 #   results/spike/<codec>_<name>.bit
-#   results/spike/<codec>_<name>_decoded.pcm
+#   results/spike/<codec>_<name>.log
 #
 # After this, compare against native output:
 #   bash scripts/compare_outputs.sh
@@ -52,13 +56,9 @@ for codec in $CODECS; do
   fi
 
   BIT="results/spike/${codec}_${NAME}.bit"
-  DECODED="results/spike/${codec}_${NAME}_decoded.pcm"
 
   echo "==> ${codec}: spike encode"
-  "$SPIKE" "$PK" "$ELF" encode "$INPUT" "$BIT" | tee "results/spike/${codec}_${NAME}_encode.log"
-
-  echo "==> ${codec}: spike decode"
-  "$SPIKE" "$PK" "$ELF" decode "$BIT" "$DECODED" | tee "results/spike/${codec}_${NAME}_decode.log"
+  "$SPIKE" "$PK" "$ELF" "$INPUT" "$BIT" | tee "results/spike/${codec}_${NAME}.log"
 done
 
 echo "Spike run complete for INPUT=$INPUT"
