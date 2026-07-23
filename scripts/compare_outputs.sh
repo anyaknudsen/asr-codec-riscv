@@ -1,9 +1,12 @@
 #!/bin/bash
-# Compares native, Spike, and gem5 outputs for the same dataset input.
-# This is the core correctness check of the whole workflow:
+# Compares native, Spike, and gem5 encode outputs for the same dataset
+# input. This is the core correctness check of the whole workflow:
 #
-#   native .bit == Spike .bit == gem5 .bit                 (encode)
-#   native decoded .pcm == Spike decoded .pcm == gem5 decoded .pcm  (decode)
+#   native .bit == Spike .bit == gem5 .bit
+#
+# This project only exercises/measures the encoder: decoding is
+# assumed to happen off the edge device this project profiles (see
+# README.md), so there is nothing to compare on the decode side.
 #
 # Only trust gem5 performance stats (scripts/run_gem5.sh, results/gem5/*/stats.txt)
 # after this script reports that all outputs match.
@@ -45,18 +48,13 @@ compare() {
 
 for codec in $CODECS; do
   NATIVE_BIT="results/native/${codec}_${NAME}.bit"
-  NATIVE_DEC="results/native/${codec}_${NAME}_decoded.pcm"
   SPIKE_BIT="results/spike/${codec}_${NAME}.bit"
-  SPIKE_DEC="results/spike/${codec}_${NAME}_decoded.pcm"
-  GEM5_BIT="results/gem5/${codec}_${NAME}_encode/${codec}_${NAME}.bit"
-  GEM5_DEC="results/gem5/${codec}_${NAME}_decode/${codec}_${NAME}_decoded.pcm"
+  GEM5_BIT="results/gem5/${codec}_${NAME}/${codec}_${NAME}.bit"
 
   compare "${codec} native vs spike (encode .bit)" "$NATIVE_BIT" "$SPIKE_BIT"
-  compare "${codec} native vs spike (decode .pcm)" "$NATIVE_DEC" "$SPIKE_DEC"
 
   if [ "$WITH_GEM5" = "1" ]; then
     compare "${codec} native vs gem5 (encode .bit)" "$NATIVE_BIT" "$GEM5_BIT"
-    compare "${codec} native vs gem5 (decode .pcm)" "$NATIVE_DEC" "$GEM5_DEC"
   fi
 done
 

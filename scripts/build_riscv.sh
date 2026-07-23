@@ -59,9 +59,9 @@ mkdir -p build
 for codec in $CODECS; do
   echo "==> building build/${codec}_rv64.elf ($RISCV_ISA/$RISCV_ABI via $RISCV_CC)"
   # See the matching comment in scripts/build_native.sh: build every
-  # *.c found anywhere under codecs/<codec>/, not just encoder.c/
-  # decoder.c, so a codec can bring in extra source files of its own
-  # (e.g. codecs/codec_b/vendor/).
+  # *.c found anywhere under codecs/<codec>/, not just encoder.c, so a
+  # codec can bring in extra source files of its own (e.g.
+  # codecs/codec_b/vendor/).
   CODEC_SRCS="$(find codecs/"$codec" -name '*.c' | sort)"
   "$RISCV_CC" $OPT -static -march="$RISCV_ISA" -mabi="$RISCV_ABI" \
     -Wall -Wextra -std=c11 -ffp-contract=off \

@@ -1,7 +1,7 @@
 #!/bin/bash
-# Runs each codec's RISC-V binary under gem5's syscall-emulation (SE)
-# mode with a configurable CPU/cache/memory model, producing both the
-# codec's own output file and gem5 architecture-level performance
+# Runs each codec's RISC-V encoder binary under gem5's syscall-emulation
+# (SE) mode with a configurable CPU/cache/memory model, producing both
+# the encoded output file and gem5 architecture-level performance
 # statistics (results/gem5/<run>/stats.txt).
 #
 # gem5 comes AFTER Spike: it does not replace Spike's correctness check,
@@ -9,15 +9,17 @@
 # of a binary Spike has already validated. Use a tiny input here -
 # gem5 simulation is much slower than Spike.
 #
+# This project only exercises/measures the encoder: decoding is
+# assumed to happen off the edge device this project profiles (see
+# README.md), so there is no decode step here.
+#
 # Usage:
 #   bash scripts/run_gem5.sh
 #   INPUT=dataset/pcm/small_10frames.pcm CPU_TYPE=TimingSimpleCPU bash scripts/run_gem5.sh
 #
 # Produces (for INPUT=dataset/pcm/<name>.pcm):
-#   results/gem5/<codec>_<name>_encode/<codec>_<name>.bit
-#   results/gem5/<codec>_<name>_encode/stats.txt   (+ config.ini, simout, simerr, ...)
-#   results/gem5/<codec>_<name>_decode/<codec>_<name>_decoded.pcm
-#   results/gem5/<codec>_<name>_decode/stats.txt
+#   results/gem5/<codec>_<name>/<codec>_<name>.bit
+#   results/gem5/<codec>_<name>/stats.txt   (+ config.ini, simout, simerr, ...)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -65,35 +67,24 @@ for codec in $CODECS; do
     exit 1
   fi
 
-  for mode in encode decode; do
-    RUN_DIR="results/gem5/${codec}_${NAME}_${mode}"
-    mkdir -p "$RUN_DIR"
-    ABS_RUN_DIR="$ROOT_DIR/$RUN_DIR"
+  RUN_DIR="results/gem5/${codec}_${NAME}"
+  mkdir -p "$RUN_DIR"
+  ABS_RUN_DIR="$ROOT_DIR/$RUN_DIR"
 
-    if [ "$mode" = "encode" ]; then
-      IN_PATH="$ROOT_DIR/$INPUT"
-      OUT_PATH="$ABS_RUN_DIR/${codec}_${NAME}.bit"
-    else
-      IN_PATH="$ABS_RUN_DIR/../${codec}_${NAME}_encode/${codec}_${NAME}.bit"
-      OUT_PATH="$ABS_RUN_DIR/${codec}_${NAME}_decoded.pcm"
-      if [ ! -f "$IN_PATH" ]; then
-        echo "error: expected encode output '$IN_PATH' - run encode first (this script does encode then decode per codec)." >&2
-        exit 1
-      fi
-    fi
+  IN_PATH="$ROOT_DIR/$INPUT"
+  OUT_PATH="$ABS_RUN_DIR/${codec}_${NAME}.bit"
 
-    echo "==> ${codec}: gem5 ${mode} (outdir=$RUN_DIR)"
-    "$GEM5" --outdir="$ABS_RUN_DIR" \
-      "$SE_PY" \
-      --cmd="$ELF" \
-      --options="$mode $IN_PATH $OUT_PATH" \
-      --output="$ABS_RUN_DIR/simout" \
-      --errout="$ABS_RUN_DIR/simerr" \
-      --cpu-type="$CPU_TYPE" \
-      "${CACHE_FLAGS[@]}" \
-      --mem-size="$MEM_SIZE"
-  done
+  echo "==> ${codec}: gem5 encode (outdir=$RUN_DIR)"
+  "$GEM5" --outdir="$ABS_RUN_DIR" \
+    "$SE_PY" \
+    --cmd="$ELF" \
+    --options="$IN_PATH $OUT_PATH" \
+    --output="$ABS_RUN_DIR/simout" \
+    --errout="$ABS_RUN_DIR/simerr" \
+    --cpu-type="$CPU_TYPE" \
+    "${CACHE_FLAGS[@]}" \
+    --mem-size="$MEM_SIZE"
 done
 
 echo "gem5 run complete for INPUT=$INPUT"
-echo "Stats: results/gem5/<codec>_${NAME}_<mode>/stats.txt"
+echo "Stats: results/gem5/<codec>_${NAME}/stats.txt"

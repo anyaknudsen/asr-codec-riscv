@@ -5,40 +5,44 @@
  * codec_b
  * =======
  *
- * codec_b is MP3 (MPEG-1/2 Audio Layer III): encoding via the vendored
- * `shine` fixed-point encoder, decoding via the vendored `minimp3`
- * decoder. See `vendor/README.md` for exactly what was vendored from
- * each upstream project and why.
+ * codec_b is MP3 (MPEG-1/2 Audio Layer III) encoding via the vendored
+ * `shine` fixed-point encoder. See `vendor/README.md` for exactly what
+ * was vendored and why.
  *
- * Design: encoder.c/decoder.c are adapters, not reimplementations
- * -----------------------------------------------------------------
- * `encoder.c` and `decoder.c` do NOT implement an MP3 codec from
- * scratch. All of the actual encoding/decoding algorithm lives in
- * `vendor/shine/` and `vendor/minimp3/` (copied verbatim from their
- * upstream projects). `encoder.c`/`decoder.c` are thin adapters that:
- *   - translate between this project's shared conventions
+ * This project only implements/measures the encoder side of codec_b:
+ * decoding is assumed to happen off the edge device this project
+ * profiles (see README.md), so there is no decoder.c and no vendored
+ * MP3 decoder here.
+ *
+ * Design: encoder.c is an adapter, not a reimplementation
+ * ---------------------------------------------------------
+ * `encoder.c` does NOT implement an MP3 encoder from scratch. All of
+ * the actual encoding algorithm lives in `vendor/shine/` (copied
+ * verbatim from its upstream project). `encoder.c` is a thin adapter
+ * that:
+ *   - translates between this project's shared conventions
  *     (`pcm_buffer_t` from common/pcm.h, `io_*` helpers from
  *     common/io.h, the frame-loop / `frames=<n>` return-value
- *     convention from common/codec_api.h) and each vendored library's
- *     own API (`shine_*` / `mp3dec_*`), and
- *   - own the on-disk bitstream format for this codec, which is
+ *     convention from common/codec_api.h) and the vendored library's
+ *     own API (`shine_*`), and
+ *   - owns the on-disk bitstream format for this codec, which is
  *     simply a raw/headerless MP3 elementary stream (the exact bytes
  *     `shine_encode_buffer()`/`shine_flush()` produce, concatenated -
  *     no extra magic/header is added, since MPEG frame headers already
- *     let a decoder self-synchronize and minimp3 already knows how to
- *     parse that format directly).
+ *     let a decoder self-synchronize on whichever device does the
+ *     decoding).
  *
  * Build integration
  * ------------------
- * Because the actual codec now spans more than just encoder.c/
- * decoder.c, scripts/build_native.sh and scripts/build_riscv.sh
- * compile every *.c file found anywhere under codecs/<name>/ (not just
- * encoder.c/decoder.c) - see the comment in those scripts. That means
- * everything under codec_b/vendor/ gets built automatically; nothing
- * else needed to change. -Icodecs/<name> is already on the include
- * path, and every #include in encoder.c/decoder.c/vendor/ uses a path
- * relative to codecs/codec_b/ (e.g. "vendor/shine/layer3.h"), so no
- * extra -I flags were needed either.
+ * Because the actual codec now spans more than just encoder.c,
+ * scripts/build_native.sh and scripts/build_riscv.sh compile every
+ * *.c file found anywhere under codecs/<name>/ (not just encoder.c) -
+ * see the comment in those scripts. That means everything under
+ * codec_b/vendor/ gets built automatically; nothing else needed to
+ * change. -Icodecs/<name> is already on the include path, and every
+ * #include in encoder.c/vendor/ uses a path relative to
+ * codecs/codec_b/ (e.g. "vendor/shine/layer3.h"), so no extra -I
+ * flags were needed either.
  *
  * Sample rate / frame size
  * -------------------------
@@ -69,28 +73,16 @@
  * (see the `bitrates` table in vendor/shine/layer3.h) - encode_file()
  * calls `shine_check_config()` to verify this at runtime.
  *
- * Bitstream/round-trip note
- * --------------------------
- * MP3 is lossy, and decoding introduces encoder delay/padding, so
- * decode_file(encode_file(input)) does NOT reproduce `input` sample-
- * for-sample - that is expected and does not matter for this project:
- * scripts/compare_outputs.sh only checks that native/Spike/gem5 outputs
- * match *each other* for a given input, never that decoded output
- * matches the original PCM. What must hold (and does, verified with
- * `qemu-riscv64` against every dataset/pcm/*.pcm file, since Spike/gem5
- * were not available in this environment - see the note in
- * decoder.c/encoder.c) is that encode_file()/decode_file() are exactly
- * reproducible across runs and across native/RISC-V builds.
- *
- * The one place this actually took work: minimp3 (decoder.c) by
- * default picks an x86 SSE2 intrinsics synthesis-filter path on native
- * x86-64 builds and a portable scalar-C path on RISC-V (no SSE2
- * there); those two paths sum in different orders and produced
- * off-by-one-int16 native-vs-RISC-V decode differences until
- * `vendor/minimp3/minimp3_impl.c` forced `MINIMP3_NO_SIMD` - the same
- * class of issue `-ffp-contract=off` guards against elsewhere in this
- * project (see README.md "Common C portability issues"), just from
- * SIMD-vs-scalar reassociation instead of FMA contraction.
+ * Reproducibility note
+ * ----------------------
+ * What scripts/compare_outputs.sh checks is that encode_file()'s
+ * output is exactly reproducible across runs and across native/RISC-V
+ * builds (native/Spike/gem5 encode outputs must be byte-identical) -
+ * it does not decode anything itself. The one place this actually
+ * took work on the encoder side: see `-ffp-contract=off` in
+ * README.md's "Common C portability issues" for the general class of
+ * native-vs-RISC-V floating-point/SIMD reassociation issue to watch
+ * for if this encoder ever grows floating-point code paths.
  */
 
 /* Dataset sample rate codec_b encodes at (Hz). Must be one of shine's
@@ -106,6 +98,5 @@
 #define CODEC_B_BITRATE_KBPS 32
 
 int encode_file(const char *input_path, const char *output_path);
-int decode_file(const char *input_path, const char *output_path);
 
 #endif /* CODEC_B_H */

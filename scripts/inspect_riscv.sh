@@ -45,7 +45,7 @@ for codec in $CODECS; do
 
   echo "==> ${codec}: spike instruction trace (encode, tiny input)"
   BIT="results/spike/${codec}_${NAME}.bit"
-  "$SPIKE" -l "$PK" "$ELF" encode "$INPUT" "$BIT" \
+  "$SPIKE" -l "$PK" "$ELF" "$INPUT" "$BIT" \
     > /dev/null 2> "results/spike/${codec}_${NAME}.trace"
 done
 

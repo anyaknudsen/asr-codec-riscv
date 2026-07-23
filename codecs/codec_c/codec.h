@@ -11,20 +11,23 @@
  * point already know how to treat codec_c identically to codec_a and
  * codec_b.
  *
+ * This project only implements/measures the encoder (decoding is
+ * assumed to happen off the edge device this project profiles - see
+ * README.md), so there is no decoder.c here.
+ *
  * Fill in below:
  *   - Sample rate / frame size this codec expects.
  *   - Any other codec-specific constants (bitstream magic bytes,
  *     quantizer tables, filter/LPC order, mode-decision thresholds,
  *     codebook sizes, etc.).
- *   - Any internal structs shared between encoder.c and decoder.c
- *     (put those here, or in a private codec_c-only helper header next
- *     to this file, e.g. codecs/codec_c/internal.h).
+ *   - Any internal structs/helpers encoder.c needs (put those here, or
+ *     in a private codec_c-only helper header next to this file, e.g.
+ *     codecs/codec_c/internal.h).
  *
- * encode_file()/decode_file() are declared here to mirror
- * common/codec_api.h (the interface app/main.c calls into). Do not
- * change their signatures - build scripts link app/main.c directly
- * against this codec's encoder.c/decoder.c, so these two symbols are
- * the only contract that needs to hold.
+ * encode_file() is declared here to mirror common/codec_api.h (the
+ * interface app/main.c calls into). Do not change its signature -
+ * build scripts link app/main.c directly against this codec's
+ * encoder.c, so this symbol is the only contract that needs to hold.
  *
  * Note: if this codec ends up using floating point, build it with
  * -march=rv64gc (or this environment's rv64gc-equivalent, see
@@ -43,6 +46,5 @@
 #define CODEC_C_FRAME_SAMPLES 0
 
 int encode_file(const char *input_path, const char *output_path);
-int decode_file(const char *input_path, const char *output_path);
 
 #endif /* CODEC_C_H */

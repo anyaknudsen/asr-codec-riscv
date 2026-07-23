@@ -25,12 +25,12 @@ mkdir -p build
 
 for codec in $CODECS; do
   echo "==> building build/${codec}_native"
-  # encoder.c/decoder.c are the only files every codec is required to
-  # have, but a codec is free to bring in extra source files of its
-  # own (e.g. a vendored library it adapts - see
-  # codecs/codec_b/vendor/) - so build every *.c found anywhere under
-  # codecs/<codec>/, not just encoder.c/decoder.c. `sort` keeps the
-  # link order (and therefore this command) reproducible across runs.
+  # encoder.c is the only file every codec is required to have, but a
+  # codec is free to bring in extra source files of its own (e.g. a
+  # vendored library it adapts - see codecs/codec_b/vendor/) - so
+  # build every *.c found anywhere under codecs/<codec>/, not just
+  # encoder.c. `sort` keeps the link order (and therefore this
+  # command) reproducible across runs.
   CODEC_SRCS="$(find codecs/"$codec" -name '*.c' | sort)"
   "$CC" $OPT -Wall -Wextra -std=c11 -ffp-contract=off \
     -Icommon -Icodecs/"$codec" \
